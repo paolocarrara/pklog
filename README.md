@@ -1,6 +1,4 @@
 pklog
 =====
 
-A good keylogger
-
-Em desenvolvimento!
+A simple and good keylogger.
